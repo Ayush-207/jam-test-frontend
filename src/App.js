@@ -36,8 +36,8 @@ const SpotifyJamRooms = () => {
   }, []);
 
   const handleSpotifyLogin = () => {
-    const clientId = 'YOUR_SPOTIFY_CLIENT_ID'; // Replace with your Client ID
-    const redirectUri = 'http://localhost:3000'; // Must match Spotify Dashboard exactly
+    const clientId = '782920ac9d3941e78c812052465ef7d1'; // Replace with your Client ID
+    const redirectUri = 'https://jamroomstest.vercel.app/'; // Must match Spotify Dashboard exactly
     const scopes = 'user-read-private user-read-email user-modify-playback-state user-read-playback-state';
     
     const authUrl = `https://accounts.spotify.com/authorize?client_id=${clientId}&response_type=token&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scopes)}`;
