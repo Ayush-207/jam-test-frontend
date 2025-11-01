@@ -6,3 +6,4 @@ node_modules/
 
 # Ignore a specific file
 my_secret_key.txt
+.vercel
