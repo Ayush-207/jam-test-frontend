@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Music, Users, Play, Pause, SkipForward, RefreshCw, LogOut } from 'lucide-react';
 
-// Backend API base URL - in production, replace with your server
-const API_BASE = 'https://jam-test-backend.onrender.com';
+// Backend API base URL
+const API_BASE = 'http://localhost:3001'; // Update with your backend URL
 
 const SpotifyJamRooms = () => {
-  const [view, setView] = useState('auth'); // auth, lobby, room
+  const [view, setView] = useState('auth');
   const [accessToken, setAccessToken] = useState(null);
   const [user, setUser] = useState(null);
   const [devices, setDevices] = useState([]);
@@ -21,26 +21,106 @@ const SpotifyJamRooms = () => {
   
   const pollInterval = useRef(null);
 
-  // Spotify OAuth - Handle callback
-  useEffect(() => {
-    const hash = window.location.hash.substring(1);
-    const params = new URLSearchParams(hash);
-    const token = params.get('access_token');
+  // PKCE Helper Functions
+  const generateCodeVerifier = () => {
+    const array = new Uint8Array(64);
+    crypto.getRandomValues(array);
+    return Array.from(array, byte => ('0' + byte.toString(16)).slice(-2)).join('');
+  };
+
+  const generateCodeChallenge = async (verifier) => {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(verifier);
+    const digest = await crypto.subtle.digest('SHA-256', data);
+    return btoa(String.fromCharCode(...new Uint8Array(digest)))
+      .replace(/=/g, '')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_');
+  };
+
+  // Exchange authorization code for access token
+  const exchangeCodeForToken = async (code) => {
+    const clientId = '782920ac9d3941e78c812052465ef7d1';
+    const redirectUri = 'https://jamroomstest.vercel.app/';
+    const codeVerifier = localStorage.getItem('code_verifier');
     
-    if (token) {
-      setAccessToken(token);
+    if (!codeVerifier) {
+      console.error('No code verifier found');
+      return;
+    }
+    
+    try {
+      const response = await fetch('https://accounts.spotify.com/api/token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          client_id: clientId,
+          grant_type: 'authorization_code',
+          code: code,
+          redirect_uri: redirectUri,
+          code_verifier: codeVerifier,
+        }),
+      });
+      
+      const data = await response.json();
+      
+      if (data.access_token) {
+        setAccessToken(data.access_token);
+        localStorage.setItem('spotify_access_token', data.access_token);
+        if (data.refresh_token) {
+          localStorage.setItem('spotify_refresh_token', data.refresh_token);
+        }
+        localStorage.removeItem('code_verifier'); // Clean up
+        fetchUserProfile(data.access_token);
+        fetchDevices(data.access_token);
+      } else {
+        console.error('Token exchange failed:', data);
+      }
+    } catch (error) {
+      console.error('Error exchanging code for token:', error);
+    }
+  };
+
+  // Check for OAuth callback or existing token
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
+    
+    if (code) {
+      console.log('Authorization code received, exchanging for token...');
+      exchangeCodeForToken(code);
       window.history.replaceState({}, document.title, window.location.pathname);
-      fetchUserProfile(token);
-      fetchDevices(token);
+      return;
+    }
+    
+    // Check for existing token
+    const storedToken = localStorage.getItem('spotify_access_token');
+    if (storedToken) {
+      console.log('Found stored token');
+      setAccessToken(storedToken);
+      fetchUserProfile(storedToken);
+      fetchDevices(storedToken);
     }
   }, []);
 
-  const handleSpotifyLogin = () => {
-    const clientId = '782920ac9d3941e78c812052465ef7d1'; // Replace with your Client ID
-    const redirectUri = 'https://jamroomstest.vercel.app/'; // Must match Spotify Dashboard exactly
+  // Spotify OAuth Login with PKCE
+  const handleSpotifyLogin = async () => {
+    const clientId = '782920ac9d3941e78c812052465ef7d1';
+    const redirectUri = 'https://jamroomstest.vercel.app/';
     const scopes = 'user-read-private user-read-email user-modify-playback-state user-read-playback-state';
     
-    const authUrl = `https://accounts.spotify.com/authorize?client_id=${clientId}&response_type=token&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scopes)}`;
+    console.log('Generating PKCE verifier and challenge...');
+    const codeVerifier = generateCodeVerifier();
+    const codeChallenge = await generateCodeChallenge(codeVerifier);
+    
+    console.log('Code verifier generated:', codeVerifier.substring(0, 20) + '...');
+    localStorage.setItem('code_verifier', codeVerifier);
+    
+    const authUrl = `https://accounts.spotify.com/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scopes)}&code_challenge_method=S256&code_challenge=${codeChallenge}`;
+    
+    console.log('Redirecting to Spotify...');
     window.location.href = authUrl;
   };
 
@@ -100,16 +180,13 @@ const SpotifyJamRooms = () => {
         if (data.trackUri) {
           setRoomState(data);
           
-          // Calculate current position based on timestamp
           const elapsedMs = Date.now() - data.timestamp;
           const currentPosition = data.positionMs + elapsedMs;
           
-          // Fetch track info
           if (data.trackUri !== currentTrack?.uri) {
             fetchTrackInfo(data.trackUri);
           }
           
-          // Auto-sync if listener and track changed
           if (!isHost && data.trackUri !== currentTrack?.uri) {
             syncPlayback(data.trackUri, currentPosition);
           }
@@ -203,7 +280,6 @@ const SpotifyJamRooms = () => {
         headers: { 'Authorization': `Bearer ${accessToken}` }
       });
       
-      // Wait a bit for Spotify to update, then get new track
       setTimeout(async () => {
         const response = await fetch('https://api.spotify.com/v1/me/player/currently-playing', {
           headers: { 'Authorization': `Bearer ${accessToken}` }
@@ -428,7 +504,6 @@ const SpotifyJamRooms = () => {
             {isHost && (
               <button
                 onClick={async () => {
-                  // Get current playback and sync it
                   const response = await fetch('https://api.spotify.com/v1/me/player/currently-playing', {
                     headers: { 'Authorization': `Bearer ${accessToken}` }
                   });
