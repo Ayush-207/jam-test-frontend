@@ -40,7 +40,7 @@ const SpotifyJamRooms = () => {
 
   // Exchange authorization code for access token
   const exchangeCodeForToken = async (code) => {
-    const clientId = 'd373e1bcfb9344c093cb0eaac9525b15';
+    const clientId = '782920ac9d3941e78c812052465ef7d1';
     const redirectUri = 'https://jamroomstest.vercel.app/';
     const codeVerifier = localStorage.getItem('code_verifier');
     
@@ -129,11 +129,24 @@ const SpotifyJamRooms = () => {
       const response = await fetch('https://api.spotify.com/v1/me', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Spotify API Error:', response.status, errorData);
+        
+        if (response.status === 403) {
+          alert('Access Denied: Your Spotify account may not be added to the app allowlist. Go to Spotify Developer Dashboard → Your App → User Management and add your email.');
+          logout();
+          return;
+        }
+      }
+      
       const data = await response.json();
       setUser(data);
       setView('lobby');
     } catch (error) {
       console.error('Error fetching user profile:', error);
+      alert('Error connecting to Spotify. Check console for details.');
     }
   };
 
