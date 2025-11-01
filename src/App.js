@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Music, Users, Play, Pause, SkipForward, RefreshCw, LogOut } from 'lucide-react';
 
 // Backend API base URL
-const API_BASE = 'http://localhost:3001'; // Update with your backend URL
+const API_BASE = 'https://jam-test-backend.onrender.com'; // Update with your backend URL
 
 const SpotifyJamRooms = () => {
   const [view, setView] = useState('auth');
