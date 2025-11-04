@@ -113,7 +113,7 @@ const SpotifyJamRooms = () => {
   }, []);
 
   const handleSpotifyLogin = async () => {
-    const clientId = '782920ac9d3941e78c812052465ef7d1';
+    const clientId = 'd373e1bcfb9344c093cb0eaac9525b15';
     const redirectUri = 'https://jamroomstest.vercel.app/';
     const scopes = 'user-read-private user-read-email user-modify-playback-state user-read-playback-state streaming';
     
