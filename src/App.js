@@ -48,7 +48,7 @@ const SpotifyJamRooms = () => {
 
   // Exchange authorization code for access token
   const exchangeCodeForToken = async (code) => {
-    const clientId = 'd373e1bcfb9344c093cb0eaac9525b15';
+    const clientId = '782920ac9d3941e78c812052465ef7d1';
     const redirectUri = 'https://jamroomstest.vercel.app/';
     const codeVerifier = localStorage.getItem('code_verifier');
     
@@ -258,6 +258,51 @@ const SpotifyJamRooms = () => {
     setShowSearch(false);
     setSearchQuery('');
     setSearchResults([]);
+  };
+
+  // Fetch user's playlists
+  const fetchPlaylists = async () => {
+    try {
+      const response = await fetch('https://api.spotify.com/v1/me/playlists?limit=50', {
+        headers: { 'Authorization': `Bearer ${accessToken}` }
+      });
+      
+      const data = await response.json();
+      setPlaylists(data.items || []);
+      setShowPlaylists(true);
+    } catch (error) {
+      console.error('Error fetching playlists:', error);
+    }
+  };
+
+  // Fetch tracks from a playlist
+  const fetchPlaylistTracks = async (playlistId) => {
+    try {
+      const response = await fetch(
+        `https://api.spotify.com/v1/playlists/${playlistId}/tracks`,
+        {
+          headers: { 'Authorization': `Bearer ${accessToken}` }
+        }
+      );
+      
+      const data = await response.json();
+      setPlaylistTracks(data.items || []);
+      setSelectedPlaylist(playlistId);
+    } catch (error) {
+      console.error('Error fetching playlist tracks:', error);
+    }
+  };
+
+  const playFromPlaylist = (track) => {
+    if (track && track.track) {
+      playTrack(track.track.uri, 0);
+    }
+  };
+
+  const closePlaylistModal = () => {
+    setShowPlaylists(false);
+    setSelectedPlaylist(null);
+    setPlaylistTracks([]);
   };
 
   const createRoom = () => {
@@ -511,13 +556,22 @@ const SpotifyJamRooms = () => {
         {/* Search Section - Only for Host */}
         {isHost && (
           <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-            <button
-              onClick={() => setShowSearch(!showSearch)}
-              className="w-full bg-blue-500 text-white py-3 rounded-lg font-semibold hover:bg-blue-600 transition flex items-center justify-center gap-2"
-            >
-              <Search className="w-5 h-5" />
-              Search Songs
-            </button>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => setShowSearch(!showSearch)}
+                className="bg-blue-500 text-white py-3 rounded-lg font-semibold hover:bg-blue-600 transition flex items-center justify-center gap-2"
+              >
+                <Search className="w-5 h-5" />
+                Search Songs
+              </button>
+              <button
+                onClick={fetchPlaylists}
+                className="bg-purple-500 text-white py-3 rounded-lg font-semibold hover:bg-purple-600 transition flex items-center justify-center gap-2"
+              >
+                <Music className="w-5 h-5" />
+                My Playlists
+              </button>
+            </div>
             
             {showSearch && (
               <div className="mt-4">
@@ -575,6 +629,91 @@ const SpotifyJamRooms = () => {
                 )}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Playlists Modal */}
+        {showPlaylists && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-lg shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden flex flex-col">
+              <div className="p-6 border-b flex justify-between items-center">
+                <h2 className="text-2xl font-bold">
+                  {selectedPlaylist ? 'Playlist Tracks' : 'My Playlists'}
+                </h2>
+                <button
+                  onClick={closePlaylistModal}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+              
+              <div className="flex-1 overflow-y-auto p-6">
+                {!selectedPlaylist ? (
+                  <div className="grid gap-3">
+                    {playlists.map((playlist) => (
+                      <div
+                        key={playlist.id}
+                        onClick={() => fetchPlaylistTracks(playlist.id)}
+                        className="flex items-center gap-4 p-4 hover:bg-gray-100 rounded-lg cursor-pointer transition"
+                      >
+                        {playlist.images[0] && (
+                          <img
+                            src={playlist.images[0].url}
+                            alt={playlist.name}
+                            className="w-16 h-16 rounded"
+                          />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold truncate">{playlist.name}</p>
+                          <p className="text-sm text-gray-600">
+                            {playlist.tracks.total} tracks
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div>
+                    <button
+                      onClick={() => {
+                        setSelectedPlaylist(null);
+                        setPlaylistTracks([]);
+                      }}
+                      className="mb-4 text-blue-500 hover:underline flex items-center gap-2"
+                    >
+                      ← Back to Playlists
+                    </button>
+                    <div className="grid gap-2">
+                      {playlistTracks.map((item, index) => (
+                        item.track && (
+                          <div
+                            key={item.track.id || index}
+                            onClick={() => playFromPlaylist(item)}
+                            className="flex items-center gap-3 p-3 hover:bg-gray-100 rounded-lg cursor-pointer transition"
+                          >
+                            {item.track.album?.images[2] && (
+                              <img
+                                src={item.track.album.images[2].url}
+                                alt={item.track.name}
+                                className="w-12 h-12 rounded"
+                              />
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <p className="font-semibold truncate">{item.track.name}</p>
+                              <p className="text-sm text-gray-600 truncate">
+                                {item.track.artists.map(a => a.name).join(', ')}
+                              </p>
+                            </div>
+                            <Play className="w-5 h-5 text-green-500 flex-shrink-0" />
+                          </div>
+                        )
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         )}
 
