@@ -293,7 +293,7 @@ const SpotifyJamRooms = () => {
       } catch (error) {
         console.error('Error polling room state:', error);
       }
-    }, 2000);
+    }, 10000);
   };
 
   const updateRoomState = async (trackUri, positionMs, playing) => {
