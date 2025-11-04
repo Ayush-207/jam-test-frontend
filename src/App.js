@@ -21,6 +21,10 @@ const SpotifyJamRooms = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [showSearch, setShowSearch] = useState(false);
+  const [showPlaylists, setShowPlaylists] = useState(false);
+  const [playlists, setPlaylists] = useState([]);
+  const [selectedPlaylist, setSelectedPlaylist] = useState(null);
+  const [playlistTracks, setPlaylistTracks] = useState([]);
   
   const pollInterval = useRef(null);
   const playerRef = useRef(null);
@@ -115,7 +119,7 @@ const SpotifyJamRooms = () => {
   const handleSpotifyLogin = async () => {
     const clientId = 'd373e1bcfb9344c093cb0eaac9525b15';
     const redirectUri = 'https://jamroomstest.vercel.app/';
-    const scopes = 'user-read-private user-read-email user-modify-playback-state user-read-playback-state streaming';
+    const scopes = 'user-read-private user-read-email user-modify-playback-state user-read-playback-state streaming playlist-read-private playlist-read-collaborative';
     
     const codeVerifier = generateCodeVerifier();
     const codeChallenge = await generateCodeChallenge(codeVerifier);
@@ -285,9 +289,9 @@ const SpotifyJamRooms = () => {
           setRoomState(data);
           
           if (!isHost && data.trackUri !== currentTrack?.uri) {
-            const elapsedMs = Date.now() - data.timestamp;
-            const currentPosition = data.positionMs + elapsedMs;
-            syncPlayback(data.trackUri, currentPosition);
+            // const elapsedMs = Date.now() - data.timestamp;
+            // const currentPosition = data.positionMs + elapsedMs;
+            syncPlayback(data.trackUri, 0);
           }
         }
       } catch (error) {
@@ -327,7 +331,7 @@ const SpotifyJamRooms = () => {
         })
       });
       
-      if (isHost && currentRoom) {
+      if (currentRoom) {
         updateRoomState(trackUri, positionMs, true);
       }
     } catch (error) {
