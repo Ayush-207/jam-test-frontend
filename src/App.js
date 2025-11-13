@@ -268,37 +268,39 @@ const SpotifyJamRooms = () => {
     window.searchTimeout = setTimeout(() => searchTracks(query), 300);
   };
 
-  const addSongToMixtape = async (track) => {
-    if (songPrompt.length > 80) {
-      alert('Prompt must be 80 characters or less');
-      return;
-    }
-
-    const updateRoomState = async (trackUri, positionMs, playing) => {
-      try {
-        await fetch(`${API_BASE}/mixtapes/${currentMixtape.id}/songs`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            trackId: track.id,
-            trackName: track.name,
-            artistName: track.artists.map(a => a.name).join(', '),
-            albumImage: track.album.images[0]?.url,
-            prompt: songPrompt,
-            addedBy: user.id,
-            addedByName: user.display_name
-          })
-        });
-
-        setShowSearch(false);
-        setSearchQuery('');
-        setSearchResults([]);
-        setSongPrompt('');
-        fetchMixtapeSongs(currentMixtape.id);
-      } catch (error) {
-        console.error('Error adding song:', error);
+    const addSongToMixtape = async (track) => {
+      if (songPrompt.length > 80) {
+        alert('Prompt must be 80 characters or less');
+        return;
       }
-    };
+      updateRoomState(track.uri, 0, true);
+
+      const updateRoomState = async (trackUri, positionMs, playing) => {
+        try {
+          await fetch(`${API_BASE}/mixtapes/${currentMixtape.id}/songs`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              trackId: track.id,
+              trackName: track.name,
+              artistName: track.artists.map(a => a.name).join(', '),
+              albumImage: track.album.images[0]?.url,
+              prompt: songPrompt,
+              addedBy: user.id,
+              addedByName: user.display_name
+            })
+          });
+
+          setShowSearch(false);
+          setSearchQuery('');
+          setSearchResults([]);
+          setSongPrompt('');
+          fetchMixtapeSongs(currentMixtape.id);
+        } catch (error) {
+          console.error('Error adding song:', error);
+        }
+      };
+    }
 
     const likeSong = async (songId) => {
       try {
