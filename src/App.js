@@ -94,6 +94,9 @@ const SpotifyJamRooms = () => {
           fetchCurrentRoomSong();
           fetchUsersCurrentUserSong();
           console.log("is admin:", jamAdminId == user.id);
+          console.log("jamAdminId:", jamAdminId);
+          console.log("user.id:", user.id);
+          
           console.log("currentUserSong:", currentUserSong);
           console.log("currentRoomSong:", currentRoomSong);
           if ((jamAdminId != user.id) && (currentRoomSong != null) && (currentUserSong != currentRoomSong)) {
