@@ -92,8 +92,10 @@ const SpotifyJamRooms = () => {
         const interval = setInterval(() => {
 
           fetchCurrentRoomSong();
-          fetchUserscurrentUserSong();
-
+          fetchUsersCurrentUserSong();
+          console.log("is admin:", jamAdminId == user.id);
+          console.log("currentUserSong:", currentUserSong);
+          console.log("currentRoomSong:", currentRoomSong);
           if ((jamAdminId != user.id) && (currentRoomSong != null) && (currentUserSong != currentRoomSong)) {
               console.log("Playing song on device:", devices.at(0).id, currentRoomSong);
               playSongOnDevice(devices.at(0).id, currentRoomSong);
@@ -140,7 +142,7 @@ const SpotifyJamRooms = () => {
     }
   }
 
-  const fetchUserscurrentUserSong = async () => { 
+  const fetchUsersCurrentUserSong = async () => { 
     try {
       const response = await fetch('https://api.spotify.com/v1/me/player', {
         headers: { 'Authorization': `Bearer ${accessToken}` }
@@ -151,7 +153,6 @@ const SpotifyJamRooms = () => {
       const data = await response.json();
       console.log("Fetched users current song:", data);
       setCurrentUserSong(data.context.uri);
-      console.log('Current song playing:', data);
     } catch (error) {
       console.error('Error fetching current song playing:', error);
     }
@@ -164,7 +165,7 @@ const SpotifyJamRooms = () => {
       console.log("Fetched room state:", data);
       if (data.track_uri) {
         setJamAdminId(data.admin_id)
-        setCurrentRoomSong(data.trackUri)
+        setCurrentRoomSong(data.track_uri)
       }
     } catch (error) {
       console.error('Error fetching current room song:', error);
