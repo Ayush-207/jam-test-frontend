@@ -147,8 +147,9 @@ const SpotifyJamRooms = () => {
       });
 
       if (response.status === 204) return; // No content
-      console.log("Fetched users current song:", data);
+      
       const data = await response.json();
+      console.log("Fetched users current song:", data);
       setCurrentUserSong(data.context.uri);
       console.log('Current song playing:', data);
     } catch (error) {
@@ -464,7 +465,7 @@ const SpotifyJamRooms = () => {
                 <Music className="w-7 h-7 text-green-500" />
                 Jam Rooms
               </h1>
-              {devices[0].deviceId && <h2>Device: {devices[0].deviceId}</h2>}
+              {devices?.[0]?.deviceId && <h2>Device: {devices[0].deviceId}</h2>}
               </div>
               <button onClick={logout} className="text-gray-500 hover:text-gray-700">
                 <LogOut className="w-5 h-5" />
