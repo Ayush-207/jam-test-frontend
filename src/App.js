@@ -94,10 +94,10 @@ const SpotifyJamRooms = () => {
           fetchCurrentRoomSong();
           fetchUserscurrentUserSong();
 
-          if ((jamAdminId != user.id) && (currentRoomSong != nil) && (currentUserSong != currentRoomSong)) {
+          if ((jamAdminId != user.id) && (currentRoomSong != null) && (currentUserSong != currentRoomSong)) {
               console.log("Playing song on device:", devices.at(0).id, currentRoomSong);
               playSongOnDevice(devices.at(0).id, currentRoomSong);
-          } else if ((jamAdminId == user.id) && (currentUserSong != nil) && (currentUserSong != currentRoomSong)) {
+          } else if ((jamAdminId == user.id) && (currentUserSong != null) && (currentUserSong != currentRoomSong)) {
               console.log("Admin updating room state with song:", currentUserSong);
               updateRoomState();
           }
@@ -147,7 +147,7 @@ const SpotifyJamRooms = () => {
       });
 
       if (response.status === 204) return; // No content
-
+      console.log("Fetched users current song:", data);
       const data = await response.json();
       setCurrentUserSong(data.context.uri);
       console.log('Current song playing:', data);
@@ -160,9 +160,9 @@ const SpotifyJamRooms = () => {
     try {
       const response = await fetch(`${API_BASE}/jamrooms/${currentJamRoom.id}/state`);
       const data = await response.json();
-      id, title, admin_id, track_uri
+      console.log("Fetched room state:", data);
       if (data.track_uri) {
-        setJamAdminId(admin_id)
+        setJamAdminId(data.admin_id)
         setCurrentRoomSong(data.trackUri)
       }
     } catch (error) {
