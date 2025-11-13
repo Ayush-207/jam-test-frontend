@@ -80,7 +80,7 @@ const SpotifyJamRooms = () => {
         localStorage.setItem('spotify_access_token', data.access_token);
         localStorage.removeItem('code_verifier');
         fetchUserProfile(data.access_token);
-        fetchDeviceList();
+        fetchDeviceList(data.access_token);
       }
     } catch (error) {
       console.error('Error exchanging code for token:', error);
@@ -106,7 +106,7 @@ const SpotifyJamRooms = () => {
 
         return () => clearInterval(interval);
       }
-  }, [])
+  }, [view])
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -204,13 +204,14 @@ const SpotifyJamRooms = () => {
     }
   };
 
-  const fetchDeviceList = async () => {
+  const fetchDeviceList = async (token) => {
     try {
       const response = await fetch('https://api.spotify.com/v1/me/player/devices', {
-        headers: { 'Authorization': `Bearer ${accessToken}` }
+        headers: { 'Authorization': `Bearer ${token}` }
       });
 
       const data = await response.json();
+      console.log('Fetched devices:', data);
       setDevices(data.devices || []);
     } catch (error) {
       console.error('Error fetching devices:', error);
@@ -732,22 +733,22 @@ const SpotifyJamRooms = () => {
                 {mixtapeSongs.map((song) => (
                   <div key={song.id} className="bg-white rounded-lg p-4 shadow">
                     <div className="flex gap-4">
-                      {song.albumImage && (
-                        <img src={song.albumImage} alt={song.trackName} className="w-20 h-20 rounded" />
+                      {song.album_image && (
+                        <img src={song.album_image} alt={song.track_name} className="w-20 h-20 rounded" />
                       )}
                       <div className="flex-1">
-                        <h3 className="font-bold text-lg">{song.trackName}</h3>
-                        <p className="text-gray-600 text-sm mb-2">{song.artistName}</p>
+                        <h3 className="font-bold text-lg">{song.track_name}</h3>
+                        <p className="text-gray-600 text-sm mb-2">{song.artist_Name}</p>
                         {song.prompt && (
                           <p className="text-gray-700 italic text-sm mb-2">"{song.prompt}"</p>
                         )}
                         <div className="flex items-center gap-4 text-sm text-gray-500">
-                          <span>Added by {song.addedByName}</span>
+                          <span>Added by {song.added_by_name}</span>
                           <button
                             onClick={() => likeSong(song.id)}
                             className="flex items-center gap-1 hover:text-red-500 transition"
                           >
-                            <Heart className={`w-4 h-4 ${song.likedByUser ? 'fill-red-500 text-red-500' : ''}`} />
+                            <Heart className={`w-4 h-4 ${song.likes ? 'fill-red-500 text-red-500' : ''}`} />
                             <span>{song.likes || 0}</span>
                           </button>
                         </div>
