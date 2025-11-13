@@ -1,33 +1,36 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Music, Users, Play, Pause, SkipForward, RefreshCw, LogOut, Search, X } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Music, Users, ArrowLeft, Heart, Search, X, Plus, LogOut } from 'lucide-react';
 
 // Backend API base URL
 const API_BASE = 'https://jam-test-backend.onrender.com'; // Update with your backend URL
 
 const SpotifyJamRooms = () => {
-  const [view, setView] = useState('auth');
+  const [view, setView] = useState('auth'); // auth, home, jamRoom, mixtape
   const [accessToken, setAccessToken] = useState(null);
   const [user, setUser] = useState(null);
-  const [deviceId, setDeviceId] = useState(null);
-  
-  const [roomId, setRoomId] = useState('');
-  const [isHost, setIsHost] = useState(false);
-  const [currentRoom, setCurrentRoom] = useState(null);
-  
-  const [roomState, setRoomState] = useState(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTrack, setCurrentTrack] = useState(null);
-  
+
+  // Jam Rooms
+  const [jamRooms, setJamRooms] = useState([]);
+  const [currentJamRoom, setCurrentJamRoom] = useState(null);
+  const [showCreateJamRoom, setShowCreateJamRoom] = useState(false);
+  const [newJamRoomTitle, setNewJamRoomTitle] = useState('');
+  const [newJamRoomDesc, setNewJamRoomDesc] = useState('');
+
+  // Mixtapes
+  const [mixtapes, setMixtapes] = useState([]);
+  const [currentMixtape, setCurrentMixtape] = useState(null);
+  const [mixtapeSongs, setMixtapeSongs] = useState([]);
+  const [showCreateMixtape, setShowCreateMixtape] = useState(false);
+  const [newMixtapeTitle, setNewMixtapeTitle] = useState('');
+  const [newMixtapeDesc, setNewMixtapeDesc] = useState('');
+
+  // Song Search
+  const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
-  const [showSearch, setShowSearch] = useState(false);
-  const [showPlaylists, setShowPlaylists] = useState(false);
-  const [playlists, setPlaylists] = useState([]);
-  const [selectedPlaylist, setSelectedPlaylist] = useState(null);
-  const [playlistTracks, setPlaylistTracks] = useState([]);
-  
-  const pollInterval = useRef(null);
-  const playerRef = useRef(null);
+  const [songPrompt, setSongPrompt] = useState('');
+
+  const [activeTab, setActiveTab] = useState('jamrooms'); // jamrooms, mixtapes
 
   // PKCE Helper Functions
   const generateCodeVerifier = () => {
@@ -46,25 +49,17 @@ const SpotifyJamRooms = () => {
       .replace(/\//g, '_');
   };
 
-  // Exchange authorization code for access token
   const exchangeCodeForToken = async (code) => {
     const clientId = 'd373e1bcfb9344c093cb0eaac9525b15';
     const redirectUri = 'https://jamroomstest.vercel.app/';
     const codeVerifier = localStorage.getItem('code_verifier');
-    
-    if (!codeVerifier) {
-      console.error('No code verifier found');
-      alert('OAuth Error: No code verifier found. Please try logging in again.');
-      localStorage.clear();
-      return;
-    }
-    
+
+    if (!codeVerifier) return;
+
     try {
       const response = await fetch('https://accounts.spotify.com/api/token', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
           client_id: clientId,
           grant_type: 'authorization_code',
@@ -73,23 +68,12 @@ const SpotifyJamRooms = () => {
           code_verifier: codeVerifier,
         }),
       });
-      
+
       const data = await response.json();
-      
-      if (!response.ok) {
-        console.error('Token exchange failed:', data);
-        alert(`Spotify Error: ${data.error} - ${data.error_description || 'Token exchange failed'}`);
-        localStorage.clear();
-        return;
-      }
-      
+
       if (data.access_token) {
-        console.log('Token received successfully!');
         setAccessToken(data.access_token);
         localStorage.setItem('spotify_access_token', data.access_token);
-        if (data.refresh_token) {
-          localStorage.setItem('spotify_refresh_token', data.refresh_token);
-        }
         localStorage.removeItem('code_verifier');
         fetchUserProfile(data.access_token);
       }
@@ -101,14 +85,13 @@ const SpotifyJamRooms = () => {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const code = params.get('code');
-    
+
     if (code) {
-      console.log('Authorization code received');
       exchangeCodeForToken(code);
       window.history.replaceState({}, document.title, window.location.pathname);
       return;
     }
-    
+
     const storedToken = localStorage.getItem('spotify_access_token');
     if (storedToken) {
       setAccessToken(storedToken);
@@ -119,15 +102,15 @@ const SpotifyJamRooms = () => {
   const handleSpotifyLogin = async () => {
     const clientId = 'd373e1bcfb9344c093cb0eaac9525b15';
     const redirectUri = 'https://jamroomstest.vercel.app/';
-    const scopes = 'user-read-private user-read-email user-modify-playback-state user-read-playback-state streaming playlist-read-private playlist-read-collaborative';
-    
+    const scopes = 'user-read-private user-read-email';
+
     const codeVerifier = generateCodeVerifier();
     const codeChallenge = await generateCodeChallenge(codeVerifier);
-    
+
     localStorage.setItem('code_verifier', codeVerifier);
-    
+
     const authUrl = `https://accounts.spotify.com/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scopes)}&code_challenge_method=S256&code_challenge=${codeChallenge}`;
-    
+
     window.location.href = authUrl;
   };
 
@@ -136,88 +119,125 @@ const SpotifyJamRooms = () => {
       const response = await fetch('https://api.spotify.com/v1/me', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('Spotify API Error:', response.status, errorData);
-        
-        if (response.status === 403) {
-          alert('❌ Access Denied! Your account needs to be added to the app allowlist.');
-          logout();
-          return;
-        }
-        
-        return;
-      }
-      
+
+      if (!response.ok) return;
+
       const data = await response.json();
-      console.log('User profile loaded:', data.display_name, 'Type:', data.product);
       setUser(data);
-      
-      // Initialize Web Playback SDK
-      initializeWebPlayer(token);
+      setView('home');
+      fetchJamRooms();
+      fetchMixtapes();
     } catch (error) {
       console.error('Error fetching user profile:', error);
     }
   };
 
-  const initializeWebPlayer = (token) => {
-    console.log('Initializing Web Playback SDK...');
-    
-    if (!window.Spotify) {
-      console.log('Loading Spotify SDK script...');
-      const script = document.createElement('script');
-      script.src = 'https://sdk.scdn.co/spotify-player.js';
-      script.async = true;
-      document.body.appendChild(script);
-      
-      window.onSpotifyWebPlaybackSDKReady = () => {
-        createWebPlayer(token);
-      };
-    } else {
-      createWebPlayer(token);
+  // Jam Rooms API
+  const fetchJamRooms = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/jamrooms`);
+      const data = await response.json();
+      setJamRooms(data);
+    } catch (error) {
+      console.error('Error fetching jam rooms:', error);
     }
   };
 
-  const createWebPlayer = (token) => {
-    const player = new window.Spotify.Player({
-      name: 'Jam Rooms Player',
-      getOAuthToken: cb => { cb(token); },
-      volume: 0.8
-    });
+  const createJamRoom = async () => {
+    if (!newJamRoomTitle.trim()) return;
 
-    player.addListener('ready', ({ device_id }) => {
-      console.log('Web Player ready! Device ID:', device_id);
-      setDeviceId(device_id);
-      setView('lobby');
-    });
-
-    player.addListener('not_ready', ({ device_id }) => {
-      console.log('Device has gone offline', device_id);
-    });
-
-    player.addListener('player_state_changed', (state) => {
-      if (!state) return;
-      
-      const track = state.track_window.current_track;
-      setCurrentTrack({
-        uri: track.uri,
-        name: track.name,
-        artist: track.artists.map(a => a.name).join(', '),
-        album: track.album.name,
-        image: track.album.images[0]?.url
+    try {
+      const response = await fetch(`${API_BASE}/jamrooms`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: newJamRoomTitle,
+          description: newJamRoomDesc,
+          createdBy: user.id,
+          createdByName: user.display_name
+        })
       });
-      
-      setIsPlaying(!state.paused);
-    });
 
-    player.connect().then(success => {
-      if (success) {
-        console.log('Successfully connected to Spotify!');
-      }
-    });
+      const data = await response.json();
+      setShowCreateJamRoom(false);
+      setNewJamRoomTitle('');
+      setNewJamRoomDesc('');
+      fetchJamRooms();
+    } catch (error) {
+      console.error('Error creating jam room:', error);
+    }
+  };
 
-    playerRef.current = player;
+  const joinJamRoom = async (room) => {
+    setCurrentJamRoom(room);
+    setView('jamRoom');
+  };
+
+  const leaveJamRoom = () => {
+    if (window.confirm('Are you sure you want to leave this Jam Room?')) {
+      setCurrentJamRoom(null);
+      setView('home');
+    }
+  };
+
+  // Mixtapes API
+  const fetchMixtapes = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/mixtapes`);
+      const data = await response.json();
+      setMixtapes(data);
+    } catch (error) {
+      console.error('Error fetching mixtapes:', error);
+    }
+  };
+
+  const createMixtape = async () => {
+    if (!newMixtapeTitle.trim()) return;
+
+    try {
+      const response = await fetch(`${API_BASE}/mixtapes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: newMixtapeTitle,
+          description: newMixtapeDesc,
+          createdBy: user.id,
+          createdByName: user.display_name
+        })
+      });
+
+      const data = await response.json();
+      setShowCreateMixtape(false);
+      setNewMixtapeTitle('');
+      setNewMixtapeDesc('');
+      fetchMixtapes();
+    } catch (error) {
+      console.error('Error creating mixtape:', error);
+    }
+  };
+
+  const openMixtape = async (mixtape) => {
+    setCurrentMixtape(mixtape);
+    setView('mixtape');
+    fetchMixtapeSongs(mixtape.id);
+  };
+
+  const fetchMixtapeSongs = async (mixtapeId) => {
+    try {
+      const response = await fetch(`${API_BASE}/mixtapes/${mixtapeId}/songs`);
+      const data = await response.json();
+      setMixtapeSongs(data);
+    } catch (error) {
+      console.error('Error fetching mixtape songs:', error);
+    }
+  };
+
+  const leaveMixtape = () => {
+    if (window.confirm('Are you sure you want to leave this Mixtape?')) {
+      setCurrentMixtape(null);
+      setMixtapeSongs([]);
+      setView('home');
+    }
   };
 
   // Spotify Search
@@ -226,15 +246,13 @@ const SpotifyJamRooms = () => {
       setSearchResults([]);
       return;
     }
-    
+
     try {
       const response = await fetch(
         `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=10`,
-        {
-          headers: { 'Authorization': `Bearer ${accessToken}` }
-        }
+        { headers: { 'Authorization': `Bearer ${accessToken}` } }
       );
-      
+
       const data = await response.json();
       setSearchResults(data.tracks?.items || []);
     } catch (error) {
@@ -245,534 +263,453 @@ const SpotifyJamRooms = () => {
   const handleSearchInput = (e) => {
     const query = e.target.value;
     setSearchQuery(query);
-    
-    // Debounce search
+
     if (window.searchTimeout) clearTimeout(window.searchTimeout);
-    window.searchTimeout = setTimeout(() => {
-      searchTracks(query);
-    }, 300);
+    window.searchTimeout = setTimeout(() => searchTracks(query), 300);
   };
 
-  const selectTrack = (track) => {
-    playTrack(track.uri, 0);
-    setShowSearch(false);
-    setSearchQuery('');
-    setSearchResults([]);
-  };
-
-  // Fetch user's playlists
-  const fetchPlaylists = async () => {
-    try {
-      const response = await fetch('https://api.spotify.com/v1/me/playlists?limit=50', {
-        headers: { 'Authorization': `Bearer ${accessToken}` }
-      });
-      
-      const data = await response.json();
-      setPlaylists(data.items || []);
-      setShowPlaylists(true);
-    } catch (error) {
-      console.error('Error fetching playlists:', error);
+  const addSongToMixtape = async (track) => {
+    if (songPrompt.length > 80) {
+      alert('Prompt must be 80 characters or less');
+      return;
     }
-  };
 
-  // Fetch tracks from a playlist
-  const fetchPlaylistTracks = async (playlistId) => {
-    try {
-      const response = await fetch(
-        `https://api.spotify.com/v1/playlists/${playlistId}/tracks`,
-        {
-          headers: { 'Authorization': `Bearer ${accessToken}` }
-        }
-      );
-      
-      const data = await response.json();
-      setPlaylistTracks(data.items || []);
-      setSelectedPlaylist(playlistId);
-    } catch (error) {
-      console.error('Error fetching playlist tracks:', error);
-    }
-  };
-
-  const playFromPlaylist = (track) => {
-    if (track && track.track) {
-      playTrack(track.track.uri, 0);
-    }
-  };
-
-  const closePlaylistModal = () => {
-    setShowPlaylists(false);
-    setSelectedPlaylist(null);
-    setPlaylistTracks([]);
-  };
-
-  const createRoom = () => {
-    const newRoomId = Math.random().toString(36).substring(2, 8).toUpperCase();
-    setRoomId(newRoomId);
-    setCurrentRoom(newRoomId);
-    setIsHost(true);
-    setView('room');
-  };
-
-  const joinRoom = () => {
-    if (roomId.trim()) {
-      setCurrentRoom(roomId.trim().toUpperCase());
-      setIsHost(false);
-      setView('room');
-      startPolling();
-    }
-  };
-
-  const startPolling = () => {
-    if (pollInterval.current) clearInterval(pollInterval.current);
-    
-    pollInterval.current = setInterval(async () => {
+    const updateRoomState = async (trackUri, positionMs, playing) => {
       try {
-        const response = await fetch(`${API_BASE}/rooms/${currentRoom}/state`);
-        const data = await response.json();
-        
-        if (data.trackUri) {
-          setRoomState(data);
-          
-          if (!isHost && data.trackUri !== currentTrack?.uri) {
-            // const elapsedMs = Date.now() - data.timestamp;
-            // const currentPosition = data.positionMs + elapsedMs;
-            syncPlayback(data.trackUri, 0);
-          }
-        }
+        await fetch(`${API_BASE}/mixtapes/${currentMixtape.id}/songs`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            trackId: track.id,
+            trackName: track.name,
+            artistName: track.artists.map(a => a.name).join(', '),
+            albumImage: track.album.images[0]?.url,
+            prompt: songPrompt,
+            addedBy: user.id,
+            addedByName: user.display_name
+          })
+        });
+
+        setShowSearch(false);
+        setSearchQuery('');
+        setSearchResults([]);
+        setSongPrompt('');
+        fetchMixtapeSongs(currentMixtape.id);
       } catch (error) {
-        console.error('Error polling room state:', error);
+        console.error('Error adding song:', error);
       }
-    }, 10000);
-  };
-
-  const updateRoomState = async (trackUri, positionMs, playing) => {
-    try {
-      await fetch(`${API_BASE}/rooms/${currentRoom}/state`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          trackUri,
-          positionMs,
-          isPlaying: playing,
-          timestamp: Date.now()
-        })
-      });
-    } catch (error) {
-      console.error('Error updating room state:', error);
-    }
-  };
-
-  const playTrack = async (trackUri, positionMs = 0) => {
-    try {
-      await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          uris: [trackUri],
-          position_ms: Math.floor(positionMs)
-        })
-      });
-      
-      if (currentRoom) {
-        updateRoomState(trackUri, positionMs, true);
-      }
-    } catch (error) {
-      console.error('Error playing track:', error);
-    }
-  };
-
-  const pausePlayback = async () => {
-    try {
-      await playerRef.current?.pause();
-      setIsPlaying(false);
-      
-      if (isHost && roomState) {
-        const elapsedMs = Date.now() - roomState.timestamp;
-        updateRoomState(roomState.trackUri, roomState.positionMs + elapsedMs, false);
-      }
-    } catch (error) {
-      console.error('Error pausing playback:', error);
-    }
-  };
-
-  const resumePlayback = async () => {
-    try {
-      await playerRef.current?.resume();
-      setIsPlaying(true);
-    } catch (error) {
-      console.error('Error resuming playback:', error);
-    }
-  };
-
-  const skipTrack = async () => {
-    try {
-      await playerRef.current?.nextTrack();
-      
-      setTimeout(async () => {
-        const state = await playerRef.current?.getCurrentState();
-        if (state && state.track_window.current_track) {
-          const track = state.track_window.current_track;
-          if (isHost && currentRoom) {
-            updateRoomState(track.uri, 0, true);
-          }
-        }
-      }, 500);
-    } catch (error) {
-      console.error('Error skipping track:', error);
-    }
-  };
-
-  const syncPlayback = async (trackUri, positionMs) => {
-    await playTrack(trackUri, positionMs);
-  };
-
-  const leaveRoom = () => {
-    if (pollInterval.current) clearInterval(pollInterval.current);
-    setCurrentRoom(null);
-    setRoomId('');
-    setIsHost(false);
-    setRoomState(null);
-    setView('lobby');
-  };
-
-  const logout = () => {
-    if (pollInterval.current) clearInterval(pollInterval.current);
-    if (playerRef.current) {
-      playerRef.current.disconnect();
-    }
-    localStorage.removeItem('spotify_access_token');
-    localStorage.removeItem('spotify_refresh_token');
-    localStorage.removeItem('code_verifier');
-    setAccessToken(null);
-    setUser(null);
-    setView('auth');
-  };
-
-  useEffect(() => {
-    if (view === 'room' && !isHost) {
-      startPolling();
-    }
-    return () => {
-      if (pollInterval.current) clearInterval(pollInterval.current);
     };
-  }, [view, currentRoom, isHost]);
 
-  if (view === 'auth') {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-green-400 to-blue-500 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full text-center">
-          <Music className="w-16 h-16 mx-auto mb-4 text-green-500" />
-          <h1 className="text-3xl font-bold mb-2">Spotify Jam Rooms</h1>
-          <p className="text-gray-600 mb-6">Listen together, stay in sync</p>
-          <button
-            onClick={handleSpotifyLogin}
-            className="w-full bg-green-500 text-white py-3 px-6 rounded-full font-semibold hover:bg-green-600 transition"
-          >
-            Connect with Spotify
-          </button>
-          <p className="text-xs text-gray-500 mt-4">Works with Free & Premium accounts</p>
+    const likeSong = async (songId) => {
+      try {
+        await fetch(`${API_BASE}/mixtapes/songs/${songId}/like`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: user.id })
+        });
+
+        fetchMixtapeSongs(currentMixtape.id);
+      } catch (error) {
+        console.error('Error liking song:', error);
+      }
+    };
+
+    const logout = () => {
+      localStorage.removeItem('spotify_access_token');
+      setAccessToken(null);
+      setUser(null);
+      setView('auth');
+    };
+
+    // Random colors for jam room cards
+    const cardColors = [
+      'bg-gradient-to-br from-purple-400 to-purple-600',
+      'bg-gradient-to-br from-blue-400 to-blue-600',
+      'bg-gradient-to-br from-green-400 to-green-600',
+      'bg-gradient-to-br from-pink-400 to-pink-600',
+      'bg-gradient-to-br from-orange-400 to-orange-600',
+      'bg-gradient-to-br from-red-400 to-red-600',
+    ];
+
+    // Auth View
+    if (view === 'auth') {
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-green-400 to-blue-500 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full text-center">
+            <Music className="w-16 h-16 mx-auto mb-4 text-green-500" />
+            <h1 className="text-3xl font-bold mb-2">Jam Rooms & Mixtapes</h1>
+            <p className="text-gray-600 mb-6">Connect, share, and discover music together</p>
+            <button
+              onClick={handleSpotifyLogin}
+              className="w-full bg-green-500 text-white py-3 px-6 rounded-full font-semibold hover:bg-green-600 transition"
+            >
+              Connect with Spotify
+            </button>
+          </div>
         </div>
-      </div>
-    );
-  }
+      );
+    }
 
-  if (view === 'lobby') {
-    return (
-      <div className="min-h-screen bg-gray-100 p-4">
-        <div className="max-w-2xl mx-auto">
-          <div className="bg-white rounded-lg shadow p-6 mb-6">
-            <div className="flex justify-between items-center">
-              <div>
-                <h2 className="text-2xl font-bold">Welcome, {user?.display_name}</h2>
-                <p className="text-gray-600">{user?.email}</p>
-                <p className="text-sm text-green-600 mt-1">
-                  ✓ Web Player Active {user?.product === 'premium' ? '(Premium)' : '(Free - with ads)'}
-                </p>
-              </div>
+    // Home View
+    if (view === 'home') {
+      return (
+        <div className="min-h-screen bg-gray-100">
+          {/* Header */}
+          <div className="bg-white shadow-sm sticky top-0 z-10">
+            <div className="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
+              <h1 className="text-2xl font-bold flex items-center gap-2">
+                <Music className="w-7 h-7 text-green-500" />
+                Jam Rooms
+              </h1>
               <button onClick={logout} className="text-gray-500 hover:text-gray-700">
                 <LogOut className="w-5 h-5" />
               </button>
             </div>
-          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-white rounded-lg shadow p-6">
-              <h3 className="text-xl font-bold mb-4">Create Room</h3>
+            {/* Tabs */}
+            <div className="max-w-6xl mx-auto px-4 flex gap-4 border-t">
               <button
-                onClick={createRoom}
-                className="w-full bg-green-500 text-white py-3 rounded-lg font-semibold hover:bg-green-600 transition"
+                onClick={() => setActiveTab('jamrooms')}
+                className={`py-3 px-4 font-semibold border-b-2 transition ${activeTab === 'jamrooms'
+                    ? 'border-green-500 text-green-600'
+                    : 'border-transparent text-gray-500'
+                  }`}
               >
-                Start a Jam Room
+                Jam Rooms
+              </button>
+              <button
+                onClick={() => setActiveTab('mixtapes')}
+                className={`py-3 px-4 font-semibold border-b-2 transition ${activeTab === 'mixtapes'
+                    ? 'border-green-500 text-green-600'
+                    : 'border-transparent text-gray-500'
+                  }`}
+              >
+                Mixtapes
               </button>
             </div>
+          </div>
 
-            <div className="bg-white rounded-lg shadow p-6">
-              <h3 className="text-xl font-bold mb-4">Join Room</h3>
-              <input
-                type="text"
-                placeholder="Enter Room ID"
-                value={roomId}
-                onChange={(e) => setRoomId(e.target.value.toUpperCase())}
-                className="w-full border rounded-lg p-2 mb-3"
-              />
-              <button
-                onClick={joinRoom}
-                disabled={!roomId.trim()}
-                className="w-full bg-blue-500 text-white py-3 rounded-lg font-semibold hover:bg-blue-600 transition disabled:bg-gray-300"
-              >
-                Join Room
+          <div className="max-w-6xl mx-auto p-4">
+            {/* Jam Rooms Tab */}
+            {activeTab === 'jamrooms' && (
+              <>
+                <div className="mb-6 flex justify-between items-center">
+                  <h2 className="text-xl font-bold">Available Jam Rooms</h2>
+                  <button
+                    onClick={() => setShowCreateJamRoom(true)}
+                    className="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition flex items-center gap-2"
+                  >
+                    <Plus className="w-5 h-5" />
+                    Create Room
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {jamRooms.map((room, index) => (
+                    <div
+                      key={room.id}
+                      onClick={() => joinJamRoom(room)}
+                      className={`${cardColors[index % cardColors.length]} rounded-xl p-6 text-white cursor-pointer hover:scale-105 transition-transform shadow-lg h-48 flex flex-col justify-between relative overflow-hidden`}
+                    >
+                      <div className="absolute inset-0 bg-black opacity-20"></div>
+                      <div className="relative z-10">
+                        <h3 className="text-2xl font-bold mb-2">{room.title}</h3>
+                        <p className="text-sm opacity-90">{room.description}</p>
+                      </div>
+                      <div className="relative z-10 flex items-center gap-2 text-sm">
+                        <Users className="w-4 h-4" />
+                        <span>Created by {room.createdByName}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {jamRooms.length === 0 && (
+                  <div className="text-center py-12 text-gray-500">
+                    <Music className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                    <p>No jam rooms yet. Create the first one!</p>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Mixtapes Tab */}
+            {activeTab === 'mixtapes' && (
+              <>
+                <div className="mb-6 flex justify-between items-center">
+                  <h2 className="text-xl font-bold">Mixtapes</h2>
+                  <button
+                    onClick={() => setShowCreateMixtape(true)}
+                    className="bg-purple-500 text-white px-4 py-2 rounded-lg hover:bg-purple-600 transition flex items-center gap-2"
+                  >
+                    <Plus className="w-5 h-5" />
+                    Create Mixtape
+                  </button>
+                </div>
+
+                <div className="grid gap-4">
+                  {mixtapes.map((mixtape) => (
+                    <div
+                      key={mixtape.id}
+                      onClick={() => openMixtape(mixtape)}
+                      className="bg-white rounded-lg p-6 shadow hover:shadow-lg transition cursor-pointer"
+                    >
+                      <h3 className="text-xl font-bold mb-2">{mixtape.title}</h3>
+                      <p className="text-gray-600 mb-3">{mixtape.description}</p>
+                      <div className="flex items-center gap-4 text-sm text-gray-500">
+                        <span className="flex items-center gap-1">
+                          <Music className="w-4 h-4" />
+                          {mixtape.songCount || 0} songs
+                        </span>
+                        <span>Created by {mixtape.createdByName}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {mixtapes.length === 0 && (
+                  <div className="text-center py-12 text-gray-500">
+                    <Music className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                    <p>No mixtapes yet. Create the first one!</p>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* Create Jam Room Modal */}
+          {showCreateJamRoom && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+              <div className="bg-white rounded-lg p-6 max-w-md w-full">
+                <h2 className="text-2xl font-bold mb-4">Create Jam Room</h2>
+                <input
+                  type="text"
+                  placeholder="Room Title"
+                  value={newJamRoomTitle}
+                  onChange={(e) => setNewJamRoomTitle(e.target.value)}
+                  className="w-full border rounded-lg p-3 mb-3"
+                  maxLength={50}
+                />
+                <textarea
+                  placeholder="Description (optional)"
+                  value={newJamRoomDesc}
+                  onChange={(e) => setNewJamRoomDesc(e.target.value)}
+                  className="w-full border rounded-lg p-3 mb-4 h-24"
+                  maxLength={200}
+                />
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowCreateJamRoom(false)}
+                    className="flex-1 border border-gray-300 text-gray-700 py-2 rounded-lg hover:bg-gray-50 transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={createJamRoom}
+                    disabled={!newJamRoomTitle.trim()}
+                    className="flex-1 bg-green-500 text-white py-2 rounded-lg hover:bg-green-600 transition disabled:bg-gray-300"
+                  >
+                    Create
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Create Mixtape Modal */}
+          {showCreateMixtape && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+              <div className="bg-white rounded-lg p-6 max-w-md w-full">
+                <h2 className="text-2xl font-bold mb-4">Create Mixtape</h2>
+                <input
+                  type="text"
+                  placeholder="Mixtape Title"
+                  value={newMixtapeTitle}
+                  onChange={(e) => setNewMixtapeTitle(e.target.value)}
+                  className="w-full border rounded-lg p-3 mb-3"
+                  maxLength={50}
+                />
+                <textarea
+                  placeholder="Description (optional)"
+                  value={newMixtapeDesc}
+                  onChange={(e) => setNewMixtapeDesc(e.target.value)}
+                  className="w-full border rounded-lg p-3 mb-4 h-24"
+                  maxLength={200}
+                />
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowCreateMixtape(false)}
+                    className="flex-1 border border-gray-300 text-gray-700 py-2 rounded-lg hover:bg-gray-50 transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={createMixtape}
+                    disabled={!newMixtapeTitle.trim()}
+                    className="flex-1 bg-purple-500 text-white py-2 rounded-lg hover:bg-purple-600 transition disabled:bg-gray-300"
+                  >
+                    Create
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // Jam Room View
+    if (view === 'jamRoom') {
+      return (
+        <div className="min-h-screen bg-gray-100">
+          <div className="bg-white shadow-sm sticky top-0 z-10">
+            <div className="max-w-4xl mx-auto px-4 py-4 flex items-center gap-4">
+              <button onClick={leaveJamRoom} className="text-gray-600 hover:text-gray-800">
+                <ArrowLeft className="w-6 h-6" />
               </button>
+              <div>
+                <h1 className="text-2xl font-bold">{currentJamRoom.title}</h1>
+                <p className="text-sm text-gray-600">{currentJamRoom.description}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="max-w-4xl mx-auto p-4">
+            <div className="bg-white rounded-lg p-8 text-center">
+              <Users className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+              <h2 className="text-xl font-semibold mb-2">Welcome to {currentJamRoom.title}</h2>
+              <p className="text-gray-600">Playback features coming soon...</p>
             </div>
           </div>
         </div>
-      </div>
-    );
-  }
+      );
+    }
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-400 to-pink-500 p-4">
-      <div className="max-w-2xl mx-auto">
-        <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-          <div className="flex justify-between items-center mb-4">
-            <div>
-              <h2 className="text-2xl font-bold flex items-center gap-2">
-                <Users className="w-6 h-6" />
-                Room: {currentRoom}
-              </h2>
-              <p className="text-gray-600">{isHost ? 'Host' : 'Listener'}</p>
+    // Mixtape View
+    if (view === 'mixtape') {
+      return (
+        <div className="min-h-screen bg-gray-100">
+          <div className="bg-white shadow-sm sticky top-0 z-10">
+            <div className="max-w-4xl mx-auto px-4 py-4 flex items-center gap-4">
+              <button onClick={leaveMixtape} className="text-gray-600 hover:text-gray-800">
+                <ArrowLeft className="w-6 h-6" />
+              </button>
+              <div className="flex-1">
+                <h1 className="text-2xl font-bold">{currentMixtape.title}</h1>
+                <p className="text-sm text-gray-600">{currentMixtape.description}</p>
+              </div>
+              <button
+                onClick={() => setShowSearch(true)}
+                className="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition flex items-center gap-2"
+              >
+                <Plus className="w-5 h-5" />
+                Add Song
+              </button>
             </div>
-            <button
-              onClick={leaveRoom}
-              className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 transition"
-            >
-              Leave
-            </button>
           </div>
-        </div>
 
-        {/* Search Section - Only for Host */}
-        {isHost && (
-          <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                onClick={() => setShowSearch(!showSearch)}
-                className="bg-blue-500 text-white py-3 rounded-lg font-semibold hover:bg-blue-600 transition flex items-center justify-center gap-2"
-              >
-                <Search className="w-5 h-5" />
-                Search Songs
-              </button>
-              <button
-                onClick={fetchPlaylists}
-                className="bg-purple-500 text-white py-3 rounded-lg font-semibold hover:bg-purple-600 transition flex items-center justify-center gap-2"
-              >
-                <Music className="w-5 h-5" />
-                My Playlists
-              </button>
-            </div>
-            
-            {showSearch && (
-              <div className="mt-4">
-                <div className="relative">
+          <div className="max-w-4xl mx-auto p-4">
+            {mixtapeSongs.length === 0 ? (
+              <div className="bg-white rounded-lg p-8 text-center">
+                <Music className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+                <p className="text-gray-600">No songs yet. Be the first to add one!</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {mixtapeSongs.map((song) => (
+                  <div key={song.id} className="bg-white rounded-lg p-4 shadow">
+                    <div className="flex gap-4">
+                      {song.albumImage && (
+                        <img src={song.albumImage} alt={song.trackName} className="w-20 h-20 rounded" />
+                      )}
+                      <div className="flex-1">
+                        <h3 className="font-bold text-lg">{song.trackName}</h3>
+                        <p className="text-gray-600 text-sm mb-2">{song.artistName}</p>
+                        {song.prompt && (
+                          <p className="text-gray-700 italic text-sm mb-2">"{song.prompt}"</p>
+                        )}
+                        <div className="flex items-center gap-4 text-sm text-gray-500">
+                          <span>Added by {song.addedByName}</span>
+                          <button
+                            onClick={() => likeSong(song.id)}
+                            className="flex items-center gap-1 hover:text-red-500 transition"
+                          >
+                            <Heart className={`w-4 h-4 ${song.likedByUser ? 'fill-red-500 text-red-500' : ''}`} />
+                            <span>{song.likes || 0}</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Add Song Modal */}
+          {showSearch && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+              <div className="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[80vh] overflow-hidden flex flex-col">
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="text-2xl font-bold">Add Song</h2>
+                  <button onClick={() => {
+                    setShowSearch(false);
+                    setSearchQuery('');
+                    setSearchResults([]);
+                    setSongPrompt('');
+                  }} className="text-gray-500 hover:text-gray-700">
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+
+                <div className="relative mb-4">
                   <input
                     type="text"
                     placeholder="Search for a song..."
                     value={searchQuery}
                     onChange={handleSearchInput}
-                    className="w-full border rounded-lg p-3 pr-10"
+                    className="w-full border rounded-lg p-3"
                     autoFocus
                   />
-                  {searchQuery && (
-                    <button
-                      onClick={() => {
-                        setSearchQuery('');
-                        setSearchResults([]);
-                      }}
-                      className="absolute right-3 top-3 text-gray-400 hover:text-gray-600"
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
-                  )}
                 </div>
-                
-                {searchResults.length > 0 && (
-                  <div className="mt-3 max-h-96 overflow-y-auto">
-                    {searchResults.map((track) => (
-                      <div
-                        key={track.id}
-                        onClick={() => selectTrack(track)}
-                        className="flex items-center gap-3 p-3 hover:bg-gray-100 rounded-lg cursor-pointer transition"
-                      >
-                        {track.album.images[2] && (
-                          <img
-                            src={track.album.images[2].url}
-                            alt={track.name}
-                            className="w-12 h-12 rounded"
-                          />
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <p className="font-semibold truncate">{track.name}</p>
-                          <p className="text-sm text-gray-600 truncate">
-                            {track.artists.map(a => a.name).join(', ')}
-                          </p>
-                        </div>
-                        <Play className="w-5 h-5 text-green-500 flex-shrink-0" />
-                      </div>
-                    ))}
-                  </div>
-                )}
-                
-                {searchQuery && searchResults.length === 0 && (
-                  <p className="text-center text-gray-500 mt-4">No results found</p>
-                )}
-              </div>
-            )}
-          </div>
-        )}
 
-        {/* Playlists Modal */}
-        {showPlaylists && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-lg shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden flex flex-col">
-              <div className="p-6 border-b flex justify-between items-center">
-                <h2 className="text-2xl font-bold">
-                  {selectedPlaylist ? 'Playlist Tracks' : 'My Playlists'}
-                </h2>
-                <button
-                  onClick={closePlaylistModal}
-                  className="text-gray-500 hover:text-gray-700"
-                >
-                  <X className="w-6 h-6" />
-                </button>
-              </div>
-              
-              <div className="flex-1 overflow-y-auto p-6">
-                {!selectedPlaylist ? (
-                  <div className="grid gap-3">
-                    {playlists.map((playlist) => (
-                      <div
-                        key={playlist.id}
-                        onClick={() => fetchPlaylistTracks(playlist.id)}
-                        className="flex items-center gap-4 p-4 hover:bg-gray-100 rounded-lg cursor-pointer transition"
-                      >
-                        {playlist.images[0] && (
-                          <img
-                            src={playlist.images[0].url}
-                            alt={playlist.name}
-                            className="w-16 h-16 rounded"
-                          />
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <p className="font-semibold truncate">{playlist.name}</p>
-                          <p className="text-sm text-gray-600">
-                            {playlist.tracks.total} tracks
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div>
-                    <button
-                      onClick={() => {
-                        setSelectedPlaylist(null);
-                        setPlaylistTracks([]);
-                      }}
-                      className="mb-4 text-blue-500 hover:underline flex items-center gap-2"
+                <textarea
+                  placeholder="Add a short prompt (max 80 characters)"
+                  value={songPrompt}
+                  onChange={(e) => setSongPrompt(e.target.value)}
+                  className="w-full border rounded-lg p-3 mb-4 h-20"
+                  maxLength={80}
+                />
+                <p className="text-xs text-gray-500 mb-4">{songPrompt.length}/80 characters</p>
+
+                <div className="flex-1 overflow-y-auto">
+                  {searchResults.map((track) => (
+                    <div
+                      key={track.id}
+                      onClick={() => addSongToMixtape(track)}
+                      className="flex items-center gap-3 p-3 hover:bg-gray-100 rounded-lg cursor-pointer transition"
                     >
-                      ← Back to Playlists
-                    </button>
-                    <div className="grid gap-2">
-                      {playlistTracks.map((item, index) => (
-                        item.track && (
-                          <div
-                            key={item.track.id || index}
-                            onClick={() => playFromPlaylist(item)}
-                            className="flex items-center gap-3 p-3 hover:bg-gray-100 rounded-lg cursor-pointer transition"
-                          >
-                            {item.track.album?.images[2] && (
-                              <img
-                                src={item.track.album.images[2].url}
-                                alt={item.track.name}
-                                className="w-12 h-12 rounded"
-                              />
-                            )}
-                            <div className="flex-1 min-w-0">
-                              <p className="font-semibold truncate">{item.track.name}</p>
-                              <p className="text-sm text-gray-600 truncate">
-                                {item.track.artists.map(a => a.name).join(', ')}
-                              </p>
-                            </div>
-                            <Play className="w-5 h-5 text-green-500 flex-shrink-0" />
-                          </div>
-                        )
-                      ))}
+                      {track.album.images[2] && (
+                        <img src={track.album.images[2].url} alt={track.name} className="w-12 h-12 rounded" />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold truncate">{track.name}</p>
+                        <p className="text-sm text-gray-600 truncate">
+                          {track.artists.map(a => a.name).join(', ')}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  ))}
+                </div>
               </div>
             </div>
-          </div>
-        )}
-
-        {/* Current Track */}
-        {currentTrack ? (
-          <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-            <div className="flex gap-4 mb-4">
-              {currentTrack.image && (
-                <img src={currentTrack.image} alt="Album" className="w-32 h-32 rounded-lg" />
-              )}
-              <div className="flex-1">
-                <h3 className="text-2xl font-bold mb-1">{currentTrack.name}</h3>
-                <p className="text-gray-600 mb-1">{currentTrack.artist}</p>
-                <p className="text-gray-500 text-sm">{currentTrack.album}</p>
-              </div>
-            </div>
-
-            {isHost ? (
-              <div className="flex gap-3">
-                <button
-                  onClick={isPlaying ? pausePlayback : resumePlayback}
-                  className="flex-1 bg-green-500 text-white py-3 rounded-lg font-semibold hover:bg-green-600 transition flex items-center justify-center gap-2"
-                >
-                  {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
-                  {isPlaying ? 'Pause' : 'Play'}
-                </button>
-                <button
-                  onClick={skipTrack}
-                  className="bg-blue-500 text-white py-3 px-6 rounded-lg hover:bg-blue-600 transition"
-                >
-                  <SkipForward className="w-5 h-5" />
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => syncPlayback(roomState?.trackUri, roomState?.positionMs)}
-                className="w-full bg-blue-500 text-white py-3 rounded-lg font-semibold hover:bg-blue-600 transition flex items-center justify-center gap-2"
-              >
-                <RefreshCw className="w-5 h-5" />
-                Sync Now
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="bg-white rounded-lg shadow-lg p-6 text-center">
-            <p className="text-gray-500 mb-4">
-              {isHost ? 'Search and play a song to get started' : 'Waiting for host to play music...'}
-            </p>
-          </div>
-        )}
-
-        <div className="bg-white rounded-lg shadow-lg p-4">
-          <p className="text-sm text-gray-600">
-            <strong>Instructions:</strong> {isHost ? 'Search for songs and control playback. Changes sync to all listeners every 2 seconds.' : 'Playback syncs every 2 seconds. Use "Sync Now" to realign manually.'}
-          </p>
+          )}
         </div>
-      </div>
-    </div>
-  );
-};
+      );
+    }
+
+    return null;
+  };
+}
 
 export default SpotifyJamRooms;
