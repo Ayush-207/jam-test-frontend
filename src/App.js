@@ -8,6 +8,7 @@ const SpotifyJamRooms = () => {
   const [view, setView] = useState('auth'); // auth, home, jamRoom, mixtape
   const [accessToken, setAccessToken] = useState(null);
   const [user, setUser] = useState(null);
+  const [devices, setDevices] = useState([]);
 
   // Jam Rooms
   const [jamRooms, setJamRooms] = useState([]);
@@ -15,6 +16,9 @@ const SpotifyJamRooms = () => {
   const [showCreateJamRoom, setShowCreateJamRoom] = useState(false);
   const [newJamRoomTitle, setNewJamRoomTitle] = useState('');
   const [newJamRoomDesc, setNewJamRoomDesc] = useState('');
+  const [currentUserSong, setCurrentUserSong] = useState(null);
+  const [currentRoomSong, setCurrentRoomSong] = useState(null);
+  const [jamAdminId, setJamAdminId] = useState(false);
 
   // Mixtapes
   const [mixtapes, setMixtapes] = useState([]);
@@ -76,11 +80,33 @@ const SpotifyJamRooms = () => {
         localStorage.setItem('spotify_access_token', data.access_token);
         localStorage.removeItem('code_verifier');
         fetchUserProfile(data.access_token);
+        fetchDeviceList();
       }
     } catch (error) {
       console.error('Error exchanging code for token:', error);
     }
   };
+
+  useEffect(() => {
+      if (view == 'jamRoom') {
+        const interval = setInterval(() => {
+
+          fetchCurrentRoomSong();
+          fetchUserscurrentUserSong();
+
+          if ((jamAdminId != user.id) && (currentRoomSong != nil) && (currentUserSong != currentRoomSong)) {
+              console.log("Playing song on device:", devices.at(0).id, currentRoomSong);
+              playSongOnDevice(devices.at(0).id, currentRoomSong);
+          } else if ((jamAdminId == user.id) && (currentUserSong != nil) && (currentUserSong != currentRoomSong)) {
+              console.log("Admin updating room state with song:", currentUserSong);
+              updateRoomState();
+          }
+
+        }, 10000); // Fetch devices every 10 seconds
+
+        return () => clearInterval(interval);
+      }
+  }, [])
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -98,6 +124,51 @@ const SpotifyJamRooms = () => {
       fetchUserProfile(storedToken);
     }
   }, []);
+
+  const updateRoomState = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/jamrooms/${currentJamRoom.id}/state`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          track_uri: currentUserSong,
+          admin_id: user.id
+        })
+      });
+    } catch (error) {
+      console.error('Error updating room state:', error);
+    }
+  }
+
+  const fetchUserscurrentUserSong = async () => { 
+    try {
+      const response = await fetch('https://api.spotify.com/v1/me/player', {
+        headers: { 'Authorization': `Bearer ${accessToken}` }
+      });
+
+      if (response.status === 204) return; // No content
+
+      const data = await response.json();
+      setCurrentUserSong(data.context.uri);
+      console.log('Current song playing:', data);
+    } catch (error) {
+      console.error('Error fetching current song playing:', error);
+    }
+  }
+
+  const fetchCurrentRoomSong = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/jamrooms/${currentJamRoom.id}/state`);
+      const data = await response.json();
+      id, title, admin_id, track_uri
+      if (data.track_uri) {
+        setJamAdminId(admin_id)
+        setCurrentRoomSong(data.trackUri)
+      }
+    } catch (error) {
+      console.error('Error fetching current room song:', error);
+    }
+  }
 
   const handleSpotifyLogin = async () => {
     const clientId = 'd373e1bcfb9344c093cb0eaac9525b15';
@@ -132,6 +203,33 @@ const SpotifyJamRooms = () => {
     }
   };
 
+  const fetchDeviceList = async () => {
+    try {
+      const response = await fetch('https://api.spotify.com/v1/me/player/devices', {
+        headers: { 'Authorization': `Bearer ${accessToken}` }
+      });
+
+      const data = await response.json();
+      setDevices(data.devices || []);
+    } catch (error) {
+      console.error('Error fetching devices:', error);
+    }
+  }
+
+  const playSongOnDevice = async (deviceId, trackUri) => {
+    try {
+      const response = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+        body: JSON.stringify({
+          context_uri: trackUri,
+          position_ms: 0
+      })
+      });
+    } catch (error) {
+      console.error('Error playing song on device:', error);
+    }
+  }
+
   // Jam Rooms API
   const fetchJamRooms = async () => {
     try {
@@ -153,6 +251,7 @@ const SpotifyJamRooms = () => {
         body: JSON.stringify({
           title: newJamRoomTitle,
           description: newJamRoomDesc,
+          admin_id: user.id,
           createdBy: user.id,
           createdByName: user.display_name
         })
@@ -273,9 +372,8 @@ const SpotifyJamRooms = () => {
         alert('Prompt must be 80 characters or less');
         return;
       }
-      updateRoomState(track.uri, 0, true);
 
-      const updateRoomState = async (trackUri, positionMs, playing) => {
+      const updateMixtapeState = async () => {
         try {
           await fetch(`${API_BASE}/mixtapes/${currentMixtape.id}/songs`, {
             method: 'POST',
@@ -300,6 +398,8 @@ const SpotifyJamRooms = () => {
           console.error('Error adding song:', error);
         }
       };
+
+      updateMixtapeState();
     }
 
     const likeSong = async (songId) => {
@@ -359,10 +459,13 @@ const SpotifyJamRooms = () => {
           {/* Header */}
           <div className="bg-white shadow-sm sticky top-0 z-10">
             <div className="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
+              <div>
               <h1 className="text-2xl font-bold flex items-center gap-2">
                 <Music className="w-7 h-7 text-green-500" />
                 Jam Rooms
               </h1>
+              {devices[0].deviceId && <h2>Device: {devices[0].deviceId}</h2>}
+              </div>
               <button onClick={logout} className="text-gray-500 hover:text-gray-700">
                 <LogOut className="w-5 h-5" />
               </button>
@@ -580,7 +683,14 @@ const SpotifyJamRooms = () => {
             <div className="bg-white rounded-lg p-8 text-center">
               <Users className="w-16 h-16 mx-auto mb-4 text-gray-400" />
               <h2 className="text-xl font-semibold mb-2">Welcome to {currentJamRoom.title}</h2>
-              <p className="text-gray-600">Playback features coming soon...</p>
+              {currentJamRoom.track_uri ? 
+              (<>
+              <div>
+                <p className="text-gray-600 mb-4">Current Song URI:</p>
+                <p className="font-mono bg-gray-100 p-2 rounded">{currentJamRoom.track_uri}</p>
+              </div>
+              </>) : 
+              (<> <p className="text-gray-600">Go to connected device and play songs on spotify from there. We will sync automatically.</p></>)}
             </div>
           </div>
         </div>
