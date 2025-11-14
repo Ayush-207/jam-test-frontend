@@ -93,25 +93,27 @@ const SpotifyJamRooms = () => {
 
           fetchCurrentRoomSong();
           fetchUsersCurrentUserSong();
-          console.log("is admin:", jamAdminId == user.id);
-          console.log("jamAdminId:", jamAdminId);
-          console.log("user.id:", user.id);
+          // console.log("is admin:", jamAdminId == user.id);
+          // console.log("jamAdminId:", jamAdminId);
+          // console.log("user.id:", user.id);
 
-          console.log("currentUserSong:", currentUserSong);
-          console.log("currentRoomSong:", currentRoomSong);
-          if ((jamAdminId != user.id) && (currentRoomSong != null) && (currentUserSong != currentRoomSong)) {
-              console.log("Playing song on device:", devices.at(0).id, currentRoomSong);
-              playSongOnDevice(devices.at(0).id, currentRoomSong);
-          } else if ((jamAdminId == user.id) && (currentUserSong != null) && (currentUserSong != currentRoomSong)) {
-              console.log("Admin updating room state with song:", currentUserSong);
-              updateRoomState();
-          }
-
+          // console.log("currentUserSong:", currentUserSong);
+          // console.log("currentRoomSong:", currentRoomSong);
         }, 10000); // Fetch devices every 10 seconds
 
         return () => clearInterval(interval);
       }
   }, [view])
+
+  useEffect(() => {
+      if ((jamAdminId != user.id) && (currentRoomSong != null) && (currentUserSong != currentRoomSong)) {
+        console.log("Playing song on device:", devices.at(0).id, currentRoomSong);
+        playSongOnDevice(devices.at(0).id, currentRoomSong);
+      } else if ((jamAdminId == user.id) && (currentUserSong != null) && (currentUserSong != currentRoomSong)) {
+          console.log("Admin updating room state with song:", currentUserSong);
+          updateRoomState();
+      }
+  }, [jamAdminId, currentRoomSong, currentUserSong])
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
