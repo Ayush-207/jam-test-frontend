@@ -225,28 +225,6 @@ const SpotifyJamRooms = () => {
     }
   }
 
-  const playTrack = async (trackUri, positionMs = 0) => {
-    try {
-      await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          uris: [trackUri],
-          position_ms: Math.floor(positionMs)
-        })
-      });
-      
-      if (currentRoom) {
-        updateRoomState(trackUri, positionMs, true);
-      }
-    } catch (error) {
-      console.error('Error playing track:', error);
-    }
-  };
-
   const playSongOnDevice = async (deviceId, trackUri) => {
     try {
       await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
