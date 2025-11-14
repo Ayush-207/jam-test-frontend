@@ -159,7 +159,7 @@ const SpotifyJamRooms = () => {
       
       const data = await response.json();
       console.log("Fetched users current song:", data);
-      setCurrentUserSong(data.context.uri);
+      setCurrentUserSong(data.item.uri);
     } catch (error) {
       console.error('Error fetching current song playing:', error);
     }
@@ -225,9 +225,31 @@ const SpotifyJamRooms = () => {
     }
   }
 
+  const playTrack = async (trackUri, positionMs = 0) => {
+    try {
+      await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          uris: [trackUri],
+          position_ms: Math.floor(positionMs)
+        })
+      });
+      
+      if (currentRoom) {
+        updateRoomState(trackUri, positionMs, true);
+      }
+    } catch (error) {
+      console.error('Error playing track:', error);
+    }
+  };
+
   const playSongOnDevice = async (deviceId, trackUri) => {
     try {
-      const response = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
+      await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
         method: 'PUT',
         headers: { 
           'Authorization': `Bearer ${accessToken}`,
@@ -238,11 +260,6 @@ const SpotifyJamRooms = () => {
           position_ms: 0
       })
       });
-
-      const data = await response.json()
-      if (data) {
-        console.log("song played, data:", data)
-      }
     } catch (error) {
       console.error('Error playing song on device:', error);
     }
