@@ -160,6 +160,7 @@ const SpotifyJamRooms = () => {
       const data = await response.json();
       console.log("Fetched users current song:", data);
       setCurrentUserSong(data.item.uri);
+      getAudioAnalysis(data.item.id)
     } catch (error) {
       console.error('Error fetching current song playing:', error);
     }
@@ -222,6 +223,21 @@ const SpotifyJamRooms = () => {
       setSelectedDeviceId(data.devices && data.devices.length > 0 ? data.devices[0].id : "");
     } catch (error) {
       console.error('Error fetching devices:', error);
+    }
+  }
+
+  const getAudioAnalysis = async (trackid) => {
+    try {
+      const response = await fetch(`https://api.spotify.com/v1/audio-analysis/${trackid}}`, {
+        headers: { 
+          'Authorization': `Bearer ${accessToken}`
+        }
+      });
+
+      const data = await response.json();
+      console.log('Fetched audio analysis:', data);
+    } catch (error) {
+      console.error('Error playing song on device:', error);
     }
   }
 
