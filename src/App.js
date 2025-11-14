@@ -96,7 +96,7 @@ const SpotifyJamRooms = () => {
           console.log("is admin:", jamAdminId == user.id);
           console.log("jamAdminId:", jamAdminId);
           console.log("user.id:", user.id);
-          
+
           console.log("currentUserSong:", currentUserSong);
           console.log("currentRoomSong:", currentRoomSong);
           if ((jamAdminId != user.id) && (currentRoomSong != null) && (currentUserSong != currentRoomSong)) {
@@ -166,10 +166,8 @@ const SpotifyJamRooms = () => {
       const response = await fetch(`${API_BASE}/jamrooms/${currentJamRoom.id}/state`);
       const data = await response.json();
       console.log("Fetched room state:", data);
-      if (data.track_uri) {
-        setJamAdminId(data.admin_id)
-        setCurrentRoomSong(data.track_uri)
-      }
+      setJamAdminId(data.admin_id)
+      setCurrentRoomSong(data.track_uri)
     } catch (error) {
       console.error('Error fetching current room song:', error);
     }
