@@ -106,6 +106,7 @@ const SpotifyJamRooms = () => {
   }, [view])
 
   useEffect(() => {
+      if (!user) return;
       if ((jamAdminId != user.id) && (currentRoomSong != null) && (currentUserSong != currentRoomSong)) {
         console.log("Playing song on device:", devices.at(0).id, currentRoomSong);
         playSongOnDevice(devices.at(0).id, currentRoomSong);
