@@ -9,6 +9,7 @@ const SpotifyJamRooms = () => {
   const [accessToken, setAccessToken] = useState(null);
   const [user, setUser] = useState(null);
   const [devices, setDevices] = useState([]);
+  const [selectedDeviceId, setSelectedDeviceId] = useState("");
 
   // Jam Rooms
   const [jamRooms, setJamRooms] = useState([]);
@@ -106,10 +107,10 @@ const SpotifyJamRooms = () => {
   }, [view])
 
   useEffect(() => {
-      if (!user) return;
+      if (!user || !user.id) return;
       if ((jamAdminId != user.id) && (currentRoomSong != null) && (currentUserSong != currentRoomSong)) {
-        console.log("Playing song on device:", devices.at(0).id, currentRoomSong);
-        playSongOnDevice(devices.at(0).id, currentRoomSong);
+        console.log("Playing song on device:", selectedDeviceId, currentRoomSong);
+        playSongOnDevice(selectedDeviceId, currentRoomSong);
       } else if ((jamAdminId == user.id) && (currentUserSong != null) && (currentUserSong != currentRoomSong)) {
           console.log("Admin updating room state with song:", currentUserSong);
           updateRoomState();
@@ -218,6 +219,7 @@ const SpotifyJamRooms = () => {
       const data = await response.json();
       console.log('Fetched devices:', data);
       setDevices(data.devices || []);
+      setSelectedDeviceId(data.devices && data.devices.length > 0 ? data.devices[0].id : "");
     } catch (error) {
       console.error('Error fetching devices:', error);
     }
@@ -226,6 +228,7 @@ const SpotifyJamRooms = () => {
   const playSongOnDevice = async (deviceId, trackUri) => {
     try {
       const response = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
+        method: 'PUT',
         headers: { 'Authorization': `Bearer ${accessToken}` },
         body: JSON.stringify({
           context_uri: trackUri,
@@ -466,16 +469,28 @@ const SpotifyJamRooms = () => {
           {/* Header */}
           <div className="bg-white shadow-sm sticky top-0 z-10">
             <div className="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
-              <div>
               <h1 className="text-2xl font-bold flex items-center gap-2">
                 <Music className="w-7 h-7 text-green-500" />
                 Jam Rooms
               </h1>
-              {devices?.[0]?.deviceId && <h2>Device: {devices[0].deviceId}</h2>}
+              <div className="flex items-center gap-4">
+                <select
+                  className="border border-gray-300 rounded-lg px-3 py-1 bg-white text-sm"
+                  value={selectedDeviceId}
+                  onChange={(e) => setSelectedDeviceId(e.target.value)}
+                >
+                  <option value="">Select Device</option>
+
+                  {devices?.map((dev) => (
+                    <option key={dev.id} value={dev.id}>
+                      {dev.name} {dev.is_active ? "(Active)" : ""}
+                    </option>
+                  ))}
+                </select>
+                <button onClick={logout} className="text-gray-500 hover:text-gray-700">
+                  <LogOut className="w-5 h-5" />
+                </button>
               </div>
-              <button onClick={logout} className="text-gray-500 hover:text-gray-700">
-                <LogOut className="w-5 h-5" />
-              </button>
             </div>
 
             {/* Tabs */}
