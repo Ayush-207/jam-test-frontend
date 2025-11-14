@@ -229,12 +229,20 @@ const SpotifyJamRooms = () => {
     try {
       const response = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
         method: 'PUT',
-        headers: { 'Authorization': `Bearer ${accessToken}` },
+        headers: { 
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json' 
+        },
         body: JSON.stringify({
-          context_uri: trackUri,
+          uris: [trackUri],
           position_ms: 0
       })
       });
+
+      const data = await response.json()
+      if (data) {
+        console.log("song played, data:", data)
+      }
     } catch (error) {
       console.error('Error playing song on device:', error);
     }
@@ -705,11 +713,11 @@ const SpotifyJamRooms = () => {
             <div className="bg-white rounded-lg p-8 text-center">
               <Users className="w-16 h-16 mx-auto mb-4 text-gray-400" />
               <h2 className="text-xl font-semibold mb-2">Welcome to {currentJamRoom.title}</h2>
-              {currentJamRoom.track_uri ? 
+              {currentRoomSong ? 
               (<>
               <div>
                 <p className="text-gray-600 mb-4">Current Song URI:</p>
-                <p className="font-mono bg-gray-100 p-2 rounded">{currentJamRoom.track_uri}</p>
+                <p className="font-mono bg-gray-100 p-2 rounded">{currentRoomSong}</p>
               </div>
               </>) : 
               (<> <p className="text-gray-600">Go to connected device and play songs on spotify from there. We will sync automatically.</p></>)}
